@@ -56,7 +56,7 @@ Truth Machine
 ] <--?
 ```
 Cat Program
-```
+```py
 @in
 print
 ```
