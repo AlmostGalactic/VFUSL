@@ -1,18 +1,22 @@
 '''
-VFUSL stands for Very Full Stack Language (Dont ask what the U is for).
+VFUSL stands for Very Full Stack Language (Don't ask what the U is for).
 It is where every code piece is a stack operation.
 '''
+
+class LiteralString(str):
+    pass
 
 class Environment:
     def __init__(self, parent=None):
         self.parent = parent
         self.functions = {}
-    
+        self.vars = {}
+
     def create_func(self, name, code):
         if name in self.functions or (self.parent and name in self.parent.functions):
             raise ValueError(f"Function '{name}' already exists")
         self.functions[name] = code
-    
+
     def get_func(self, name):
         if name in self.functions:
             return self.functions[name]
@@ -20,6 +24,22 @@ class Environment:
             return self.parent.get_func(name)
         else:
             raise ValueError(f"Function '{name}' not found")
+
+    def set_var(self, name, value):
+        if name in self.vars:
+            self.vars[name] = value
+        elif self.parent:
+            self.parent.set_var(name, value)
+        else:
+            self.vars[name] = value
+
+    def get_var(self, name):
+        if name in self.vars:
+            return self.vars[name]
+        elif self.parent:
+            return self.parent.get_var(name)
+        else:
+            raise ValueError(f"Variable '{name}' not found")
 
 
 class Interpreter:
@@ -47,82 +67,80 @@ class Interpreter:
             "@ord": self._ord,
             "@chr": self._chr,
             "write": self._write,
-            "whl": self._while
+            "whl": self._while,
+            "define": self._setvar
         }
 
-    def _print(self):
+    def _print(self, env=Environment()):
         if not self.stack:
             raise ValueError("Stack is empty")
         print(self.stack.pop())
 
-    def _dup(self):
+    def _dup(self, env=Environment()):
         if not self.stack:
             raise ValueError("Stack is empty")
         self.stack.append(self.stack[-1])
 
-    def _add(self):
+    def _add(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         self.stack.append(b + a)
 
-    def _sub(self):
+    def _sub(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         self.stack.append(b - a)
 
-    def _mul(self):
+    def _mul(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         self.stack.append(b * a)
 
-    def _div(self):
+    def _div(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         if a == 0:
             raise ZeroDivisionError("Division by zero")
         self.stack.append(b / a)
 
-    def _mod(self):
+    def _mod(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         if a == 0:
             raise ZeroDivisionError("Modulo by zero")
         self.stack.append(b % a)
 
-    def _eq(self):
+    def _eq(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         self.stack.append(b == a)
 
-    def _ne(self):
+    def _ne(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         self.stack.append(b != a)
 
-    def _lt(self):
+    def _lt(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         self.stack.append(b < a)
 
-    def _le(self):
+    def _le(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         self.stack.append(b <= a)
 
-    def _gt(self):
+    def _gt(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         self.stack.append(b > a)
 
-    def _ge(self):
+    def _ge(self, env=Environment()):
         a, b = self.stack.pop(), self.stack.pop()
         self.stack.append(b >= a)
 
-    def _if(self):
+    def _if(self, env=Environment()):
         if len(self.stack) < 3:
             raise ValueError("Not enough values on stack for 'if'")
-        
         else_ = self.stack.pop()
         then_ = self.stack.pop()
         cond = self.stack.pop()
-
         if cond:
             self.run_tokens(then_)
         else:
             self.run_tokens(else_)
 
-
-    def _exec(self):
+    def _exec(self, env=Environment()):
         code = self.stack.pop()
         if isinstance(code, str):
             code = self.env.get_func(code)
@@ -130,14 +148,14 @@ class Interpreter:
             raise ValueError("exec expects a code block or function name")
         self.run_tokens(code, Environment(self.env))
 
-    def _func(self):
+    def _func(self, env=Environment()):
         name = self.stack.pop()
         code = self.stack.pop()
         if not isinstance(name, str):
             raise ValueError("Function name must be a string")
         self.env.create_func(name, code)
 
-    def _input(self):
+    def _input(self, env=Environment()):
         take = input()
         try:
             inp = int(take)
@@ -145,32 +163,29 @@ class Interpreter:
             try:
                 inp = float(take)
             except ValueError:
-                pass
+                inp = take
         self.stack.append(inp)
 
-    def _chr(self):
+    def _chr(self, env=Environment()):
         value = int(self.stack.pop())
         self.stack.append(chr(value))
 
-    def _ord(self):
+    def _ord(self, env=Environment()):
         value = self.stack.pop()
         if not isinstance(value, str) or len(value) != 1:
             raise ValueError("Expected single character string")
         self.stack.append(ord(value))
 
-    def _write(self):
+    def _write(self, env=Environment()):
         print(self.stack.pop(), end='')
 
-    def _while(self):
+    def _while(self, env=Environment()):
         if len(self.stack) < 2:
             raise ValueError("Not enough values on stack for 'while'")
-        
         body = self.stack.pop()
         condition = self.stack.pop()
-
         if not isinstance(condition, list) or not isinstance(body, list):
             raise ValueError("'while' expects two code blocks")
-
         while True:
             self.run_tokens(condition)
             if not self.stack:
@@ -180,21 +195,23 @@ class Interpreter:
                 break
             self.run_tokens(body)
 
+    def _setvar(self, env=Environment()):
+        if len(self.stack) < 2:
+            raise ValueError("Not enough values on stack for 'define'")
+        value = self.stack.pop()
+        name = self.stack.pop()
+        env.set_var(name, value)
 
     def tokenize(self, code):
         tokens = []
         i = 0
         while i < len(code):
             char = code[i]
-
             if char.isspace():
                 i += 1
                 continue
-            
             if char == "#":
                 break
-
-            # Code block [ ... ]
             elif char == '[':
                 depth = 1
                 i += 1
@@ -210,8 +227,6 @@ class Interpreter:
                     block += code[i]
                     i += 1
                 tokens.append(self.tokenize(block.strip()))
-            
-            # String literal |...|
             elif char == '|':
                 i += 1
                 string_val = ''
@@ -220,10 +235,8 @@ class Interpreter:
                     i += 1
                 if i == len(code):
                     raise SyntaxError("Unterminated string literal")
-                i += 1  # Skip ending |
-                tokens.append(string_val)
-
-            # Number or word
+                i += 1
+                tokens.append(LiteralString(string_val))
             else:
                 token = ''
                 while i < len(code) and not code[i].isspace() and code[i] not in '[]|':
@@ -244,19 +257,21 @@ class Interpreter:
             return [self.parse_tokens(t) for t in tokens]
         return tokens
 
-    def run_tokens(self, tokens, parent_env=None):
-        env = parent_env or self.env
+    def run_tokens(self, tokens, parent_env=Environment()):
+        env = parent_env
         for token in tokens:
             val = self.parse_tokens(token)
             self.stack.append(val)
-
-            if isinstance(val, str):
+            if isinstance(val, str) and not isinstance(val, LiteralString):
                 if val in self.builtins:
                     self.stack.pop()
-                    self.builtins[val]()
+                    self.builtins[val](env)
                 elif val in env.functions:
                     self.stack.pop()
                     self.stack.append(env.get_func(val))
+                elif val in env.vars:
+                    self.stack.pop()
+                    self.stack.append(env.get_var(val))
 
     def execute(self, code):
         code = code.replace("\n", " ")
