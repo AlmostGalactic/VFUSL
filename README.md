@@ -42,6 +42,8 @@ Here are some:
 9. whl -- A while loop. If the condition is true, it runs the code block. (Condition must be in code block)
     - EXAMPLE: ``` [ 2 1 > ] [ |FOREVER| ] whl `` this would check if 2 is more than 1, and since it is, it runs the code block next to whl.
 10. : -- Duplicates the top item on the stack.
+11. define -- Defines a variable
+    - EXAMPLE: ``` name |AlmostGalactic| define name print ``` This should print AlmostGalactic
 
 ## Examples
 Truth Machine
@@ -60,4 +62,35 @@ Cat Program
 @in
 print
 ```
-Haven't made a calcualtor program yet... Might take too long.
+Calculator Program
+```py
+|First Number: | print
+num1 @in define
+|Second Number: | print
+num2 @in define
+|Operator (+ - * /): | print
+op @in define
+result 0 define
+op |+| ==
+[
+    |result| num1 num2 + define
+] [
+    op |-| ==
+    [
+        |result| num1 num2 - define
+    ] [
+        op |*| ==
+        [
+            |result| num1 num2 * define
+        ] [
+            op |/| ==
+            [
+                |result| num1 num2 / define
+            ] [
+                |Not supported| print
+            ] <--?
+        ] <--?
+    ] <--?
+] <--?
+result print
+```
