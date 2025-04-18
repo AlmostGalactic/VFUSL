@@ -153,7 +153,7 @@ class Interpreter:
         code = self.stack.pop()
         if not isinstance(name, str):
             raise ValueError("Function name must be a string")
-        self.env.create_func(name, code)
+        env.create_func(name, code)
 
     def _input(self, env=Environment()):
         take = input()
